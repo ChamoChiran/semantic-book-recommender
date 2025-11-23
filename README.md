@@ -141,17 +141,6 @@ Once the servers are running, the application will be accessible at:
 | API Docs (Swagger) | http://127.0.0.1:8000/docs |
 
 Press `Ctrl+C` in the terminal to stop both servers gracefully.
-
-### Running Tests
-
-To run the automated tests:
-
-```bash
-npm test
-# OR
-pytest
-```
-
 ---
 
 ## License
