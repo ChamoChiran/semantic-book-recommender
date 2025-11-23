@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SemanticReads</title>
+
+    <!-- Fonts: Lora (Serif Fallback) & Inter (UI Sans) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="container header-inner">
+            <a href="#" class="logo">
+                <i data-lucide="book-open" width="22"></i>
+                SemanticReads
+            </a>
+            <span class="tagline-small">AI-Powered Library</span>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <div class="hero-card-glass">
+                <h1 class="hero-title">SemanticReads</h1>
+                <p class="hero-desc">Describe the plot, the mood, or the feeling. We'll handle the rest.</p>
+            </div>
+        </section>
+
+        <!-- Controls -->
+        <div class="container controls-wrapper">
+            <div class="controls-glass">
+
+                <!-- Search Input -->
+                <div class="input-group">
+                    <i data-lucide="search" class="input-icon" width="20"></i>
+                    <input type="text" id="searchInput" placeholder="describe a book.">
+                </div>
+
+                <!-- Category -->
+                <div class="input-group-filter">
+                    <select id="catSelect">
+                        <option value="All">All Categories</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="select-arrow" width="16"></i>
+                </div>
+
+                <!-- Tone -->
+                <div class="input-group-filter">
+                    <select id="toneSelect">
+                        <option value="All">All Tones</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="select-arrow" width="16"></i>
+                </div>
+
+                <!-- Buttons -->
+                <div class="btn-group">
+                    <button id="searchBtn" class="btn-glass btn-search">
+                        Search
+                    </button>
+                    <button id="resetBtn" class="btn-glass btn-reset">
+                        <i data-lucide="rotate-ccw" width="16"></i>
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feedback UI -->
+        <div id="errorBanner" class="container error-msg hidden"></div>
+
+        <div id="shimmer" class="container shimmer-grid hidden">
+            <!-- 8 Skeleton Loaders -->
+            <div class="shimmer-box"></div><div class="shimmer-box"></div>
+            <div class="shimmer-box"></div><div class="shimmer-box"></div>
+            <div class="shimmer-box"></div><div class="shimmer-box"></div>
+            <div class="shimmer-box"></div><div class="shimmer-box"></div>
+        </div>
+
+        <!-- Results -->
+        <div id="resultsGrid" class="results-grid"></div>
+
+    </main>
+
+    <!-- Modal -->
+    <div id="modal" class="modal-backdrop">
+        <div class="modal-panel">
+            <button id="modalClose" class="modal-close">
+                <i data-lucide="x" width="22"></i>
+            </button>
+            <div class="modal-img-col">
+                <img id="mImg" src="" alt="" class="modal-img">
+            </div>
+            <div class="modal-info-col">
+                <div class="modal-label">Recommended Book</div>
+                <h2 id="mTitle" class="modal-h2">Title</h2>
+                <div id="mAuth" class="modal-sub">Author</div>
+                <p id="mDesc" class="modal-p">Description</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Config & State ---
+        const API = 'http://127.0.0.1:8000';
+        const state = { query: "", category: "All", tone: "All" };
+
+        // --- DOM ---
+        const els = {
+            search: document.getElementById('searchInput'),
+            cat: document.getElementById('catSelect'),
+            tone: document.getElementById('toneSelect'),
+            searchBtn: document.getElementById('searchBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            grid: document.getElementById('resultsGrid'),
+            shimmer: document.getElementById('shimmer'),
+            error: document.getElementById('errorBanner'),
+            modal: {
+                wrap: document.getElementById('modal'),
+                close: document.getElementById('modalClose'),
+                img: document.getElementById('mImg'),
+                title: document.getElementById('mTitle'),
+                auth: document.getElementById('mAuth'),
+                desc: document.getElementById('mDesc')
+            }
+        };
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadFilters();
+            runSearch(); // Initial load for empty state
+        });
+
+        // --- Handlers ---
+
+        // Remove input listener (manual search only)
+        els.search.addEventListener('keyup', (e) => {
+            // Optional: Support Enter key for convenience
+            if (e.key === 'Enter') runSearch();
+        });
+
+        // Search Button (Main Trigger)
+        els.searchBtn.addEventListener('click', () => {
+            // Update state from current inputs
+            state.query = els.search.value;
+            state.category = els.cat.value;
+            state.tone = els.tone.value;
+            runSearch();
+        });
+
+        // Filters (Just update state, do NOT auto-search)
+        els.cat.addEventListener('change', (e) => state.category = e.target.value);
+        els.tone.addEventListener('change', (e) => state.tone = e.target.value);
+
+        // Reset
+        els.resetBtn.addEventListener('click', () => {
+            state.query = ""; state.category = "All"; state.tone = "All";
+            els.search.value = ""; els.cat.value = "All"; els.tone.value = "All";
+            runSearch();
+        });
+
+        // Modal Logic
+        const toggleModal = (show) => {
+            els.modal.wrap.classList.toggle('active', show);
+            document.body.style.overflow = show ? 'hidden' : '';
+        };
+
+        els.modal.close.addEventListener('click', () => toggleModal(false));
+        els.modal.wrap.addEventListener('click', (e) => {
+            if (e.target === els.modal.wrap) toggleModal(false);
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') toggleModal(false);
+        });
+
+        // --- Data Logic ---
+
+        async function loadFilters() {
+            try {
+                const [cRes, tRes] = await Promise.all([
+                    fetch(`${API}/categories`), fetch(`${API}/tones`)
+                ]);
+
+                if (cRes.ok && tRes.ok) {
+                    fillSelect(els.cat, await cRes.json());
+                    fillSelect(els.tone, await tRes.json());
+                }
+            } catch (e) { console.warn('Filters failed', e); }
+        }
+
+        function fillSelect(el, items) {
+            // reset to just 'All'
+            el.innerHTML = '<option value="All">All</option>';
+            items.filter(i => i !== 'All').forEach(i => {
+                const opt = document.createElement('option');
+                opt.value = i; opt.textContent = i;
+                el.appendChild(opt);
+            });
+            // Update label if needed
+            if(el.id === 'catSelect') el.options[0].textContent = "All Categories";
+            if(el.id === 'toneSelect') el.options[0].textContent = "All Tones";
+        }
+
+        async function runSearch() {
+            // UI State
+            els.shimmer.classList.remove('hidden');
+            els.grid.classList.add('hidden');
+            els.error.classList.add('hidden');
+
+            const q = state.query.trim() || "books";
+
+            try {
+                const res = await fetch(`${API}/recommend`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ query: q, category: state.category, tone: state.tone })
+                });
+
+                if (!res.ok) throw new Error("Connection failed");
+                const data = await res.json();
+                render(data);
+
+            } catch (err) {
+                els.error.textContent = "Could not fetch recommendations. Ensure backend is running.";
+                els.error.classList.remove('hidden');
+            } finally {
+                els.shimmer.classList.add('hidden');
+                els.grid.classList.remove('hidden');
+            }
+        }
+
+        function render(items) {
+            els.grid.innerHTML = '';
+            if (!items || !items.length) {
+                els.grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#666;padding:40px">No matches found.</div>';
+                return;
+            }
+
+            items.forEach(([url, cap]) => {
+                const info = parse(cap);
+
+                const card = document.createElement('div');
+                card.className = 'book-card';
+                card.onclick = () => {
+                    els.modal.img.src = url;
+                    els.modal.img.onerror = () => els.modal.img.src = 'https://placehold.co/400x600/1a1a1a/white?text=No+Cover';
+                    els.modal.title.textContent = info.title;
+                    els.modal.auth.textContent = `by ${info.auth}`;
+                    els.modal.desc.textContent = info.desc;
+                    toggleModal(true);
+                };
+
+                card.innerHTML = `
+                    <div class="card-poster">
+                        <img src="${url}" loading="lazy" onerror="this.src='https://placehold.co/400x600/1a1a1a/white?text=No+Cover'">
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-title">${info.title}</div>
+                        <div class="card-author">${info.auth}</div>
+                    </div>
+                `;
+                els.grid.appendChild(card);
+            });
+        }
+
+        function parse(txt) {
+            // "Title by Author: Desc"
+            const m = txt.match(/^(.*?) by (.*?): (.*)$/);
+            if (m) return { title: m[1], auth: m[2], desc: m[3] };
+            return { title: "Unknown", auth: "Unknown", desc: txt };
+        }
+    </script>
+</body>
+</html>
